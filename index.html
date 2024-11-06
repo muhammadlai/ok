@@ -155,71 +155,102 @@
 </head>
 <body>
     <div class="container">
-        <h1>Enter Access Token</h1>
+        <h1>Upload Tokens</h1>
         <div class="form-group">
-            <label for="access_token">Access Token:</label>
-            <input type="text" id="access_token" name="access_token" required>
+            <label for="file_input">Select JSON File:</label>
+            <input type="file" id="file_input" accept=".json" required>
         </div>
         <div class="form-group">
             <label for="limit">Limit:</label>
             <input type="number" id="limit" name="limit" value="5" min="1">
         </div>
         <div class="form-group">
-            <button type="button" onclick="getChatDetails()">Get Chat Details</button>
+            <button type="button" onclick="processTokens()">Get Chat Details</button>
         </div>
         <div id="results"></div>
     </div>
 
     <script>
-        function getChatDetails() {
-            const accessToken = document.getElementById('access_token').value;
+        function processTokens() {
+            const fileInput = document.getElementById('file_input');
             const limit = document.getElementById('limit').value;
 
-            fetch('/UIDdetails', {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json'
-                },
-                body: JSON.stringify({
-                    access_token: accessToken,
-                    limit: parseInt(limit)
-                })
-            })
-            .then(response => response.json())
-            .then(data => {
-                const resultsDiv = document.getElementById('results');
-                resultsDiv.innerHTML = '';
-                const colors = ['color-1', 'color-2', 'color-3', 'color-4', 'color-5'];
-                if (data.length > 0) {
-                    data.forEach((chat, index) => {
-                        const chatDiv = document.createElement('div');
-                        chatDiv.className = `chat-detail ${colors[index % colors.length]}`;
-                        chatDiv.innerHTML = `
-                            <strong>Chat ID:</strong> ${chat.chat_id}<br>
-                            <strong>Chat Name:</strong> ${chat.chat_name}
-                            <button class="copy-btn" onclick="copyChatDetails('${chat.chat_id}', '${chat.chat_name}', this)">Copy</button><br>
-                            <div class="participants-toggle">Click me to see participants</div>
-                            <div class="participants">
-                                <strong>Participants:</strong>
-                                <ul>
-                                    ${chat.participants.map(participant => `
-                                        <li>${participant.uid}: ${participant.name}
-                                            <button class="copy-btn" onclick="copyText('${participant.uid}: ${participant.name}', this)">Copy</button>
-                                        </li>`).join('')}
-                                </ul>
-                            </div>
-                        `;
-                        chatDiv.addEventListener('click', () => {
-                            chatDiv.classList.toggle('collapsed');
-                        });
-                        resultsDiv.appendChild(chatDiv);
-                    });
-                } else {
-                    resultsDiv.innerHTML = '<p>No chat details found.</p>';
+            if (fileInput.files.length === 0) {
+                alert("Please upload a JSON file.");
+                return;
+            }
+
+            const file = fileInput.files[0];
+            const reader = new FileReader();
+
+            reader.onload = function(event) {
+                try {
+                    const tokens = JSON.parse(event.target.result);
+                    if (!Array.isArray(tokens)) {
+                        alert("The JSON file must contain an array of tokens.");
+                        return;
+                    }
+                    getChatDetails(tokens, limit);
+                } catch (error) {
+                    alert("Error reading JSON: " + error.message);
                 }
-            })
-            .catch(error => {
-                console.error('Error:', error);
+            };
+
+            reader.readAsText(file);
+        }
+
+        function getChatDetails(tokens, limit) {
+            const resultsDiv = document.getElementById('results');
+            resultsDiv.innerHTML = '';
+            const colors = ['color-1', 'color-2', 'color-3', 'color-4', 'color-5'];
+
+            tokens.forEach((accessToken, index) => {
+                fetch('/UIDdetails', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        access_token: accessToken,
+                        limit: parseInt(limit)
+                    })
+                })
+                .then(response => response.json())
+                .then(data => {
+                    const chatDiv = document.createElement('div');
+                    chatDiv.className = `chat-detail ${colors[index % colors.length]}`;
+                    chatDiv.innerHTML = `<strong>Access Token:</strong> ${accessToken}<br>`;
+
+                    if (data.length > 0) {
+                        data.forEach(chat => {
+                            chatDiv.innerHTML += `
+                                <strong>Chat ID:</strong> ${chat.chat_id}<br>
+                                <strong>Chat Name:</strong> ${chat.chat_name}
+                                <button class="copy-btn" onclick="copyChatDetails('${chat.chat_id}', '${chat.chat_name}', this)">Copy</button><br>
+                                <div class="participants-toggle">Click me to see participants</div>
+                                <div class="participants">
+                                    <strong>Participants:</strong>
+                                    <ul>
+                                        ${chat.participants.map(participant => `
+                                            <li>${participant.uid}: ${participant.name}
+                                                <button class="copy-btn" onclick="copyText('${participant.uid}: ${participant.name}', this)">Copy</button>
+                                            </li>`).join('')}
+                                    </ul>
+                                </div>
+                            `;
+                        });
+                    } else {
+                        chatDiv.innerHTML += '<p>No chat details found.</p>';
+                    }
+
+                    chatDiv.addEventListener('click', () => {
+                        chatDiv.classList.toggle('collapsed');
+                    });
+                    resultsDiv.appendChild(chatDiv);
+                })
+                .catch(error => {
+                    console.error('Error:', error);
+                });
             });
         }
 
